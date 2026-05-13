@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>适老化街景分析 | 图库与评价 (现代UI版)</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        :root {
+            --primary-blue: #3B72F2;
+            --success-green: #34C759;
+            --alert-red: #E66A6A;
+            --border-gray: #D1D1D1;
+            --bg-light: #F4F5F7;
+            --text-dark: #333333;
+            --text-light: #888888;
+            --bg-white: #FFFFFF;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body { 
+            background: #F8F9FA;
+            font-family: 'SF Pro Display', 'Helvetica Neue', 'Arial', 'PingFang SC', sans-serif; 
+            padding: 40px 20px; 
+            color: var(--text-dark);
+            display: flex; justify-content: center;
+        }
+
+        .header-diagram {
+            width: 100%;
+            max-width: 1200px; text-align: center; margin-bottom: 40px;
+            font-family: 'Courier New', Courier, monospace; color: var(--text-light);
+            font-size: 0.9rem; letter-spacing: 1px; position: absolute;
+            top: 20px;
+        }
+
+        .screens-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); gap: 40px;
+            max-width: 1300px; width: 100%; margin-top: 60px;
+        }
+
+        .phone-mockup {
+            background: var(--bg-white);
+            border: 2px solid var(--border-gray);
+            border-radius: 40px; height: 780px; position: relative; overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.05); display: flex;
+            flex-direction: column;
+        }
+        .phone-mockup::before {
+            content: '';
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            width: 60px; height: 6px; background: var(--border-gray); border-radius: 10px; z-index: 1000;
+        }
+
+        .map-area { flex: 1; width: 100%; background: #EFEFEF; z-index: 1; position: relative; }
+
+        .locate-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: var(--bg-white);
+            border: 2px solid var(--border-gray);
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--text-dark);
+            transition: all 0.2s;
+        }
+        .locate-btn:hover {
+            background: var(--primary-blue);
+            color: white;
+            border-color: var(--primary-blue);
+        }
+
+        .bottom-sheet {
+            background: var(--bg-white);
+            border-top: 1px solid var(--border-gray);
+            border-radius: 24px 24px 0 0; padding: 24px; position: absolute; bottom: 0; left: 0;
+            width: 100%;
+            z-index: 10; max-height: 60%; overflow-y: auto;
+            box-shadow: 0 -10px 20px rgba(0,0,0,0.03);
+            scroll-behavior: smooth;
+        }
+        .bottom-sheet::-webkit-scrollbar { width: 4px; }
+        .bottom-sheet::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+        .sheet-title {
+            font-size: 0.85rem;
+            letter-spacing: 1px; color: var(--text-light);
+            margin-bottom: 12px; font-weight: 600; text-transform: uppercase;
+        }
+
+        .wireframe-upload {
+            border: 1px dashed var(--border-gray);
+            border-radius: 12px; padding: 15px;
+            text-align: center; cursor: pointer; margin-bottom: 15px; color: var(--text-light); font-size: 0.9rem;
+        }
+        #streetViewInput { display: none; }
+        .preview-img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; display: none; margin-top: 10px; }
+
+        .tag-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+        .wireframe-tag {
+            border: 1px solid var(--border-gray);
+            background: transparent; padding: 6px 12px;
+            border-radius: 20px; font-size: 0.8rem; color: var(--text-dark); cursor: pointer; transition: all 0.2s;
+        }
+        .wireframe-tag.active { border-color: var(--primary-blue); color: var(--primary-blue); background: rgba(59, 114, 242, 0.05); }
+
+        .btn-fill { 
+            width: 100%;
+            padding: 14px; border: none; background: var(--primary-blue); 
+            color: white; border-radius: 24px; font-weight: 600; cursor: pointer; 
+            transition: 0.2s;
+            box-shadow: 0 4px 10px rgba(59, 114, 242, 0.3);
+        }
+        .btn-fill:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(59, 114, 242, 0.4); }
+        
+        .scheme-card {
+            border: 1px solid var(--border-gray);
+            border-radius: 16px; padding: 12px;
+            margin-bottom: 15px; cursor: pointer; transition: all 0.2s; position: relative;
+            background: var(--bg-white);
+        }
+        .scheme-card:hover { border-color: var(--primary-blue); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .scheme-card.selected { border-color: var(--primary-blue); border-width: 2px; background: rgba(59, 114, 242, 0.02); }
+        .scheme-card.selected::after {
+            content: '✓ 已选';
+            position: absolute; top: 12px; left: 12px; /* 移到左上角避免和按钮冲突 */
+            background: var(--primary-blue); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold;
+        }
+        
+        /* 卡片右上角操作按钮组 */
+        .action-btns {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 6px;
+            z-index: 2;
+        }
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid var(--border-gray);
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            color: var(--text-dark);
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .icon-btn:hover {
+            background: var(--bg-light);
+            border-color: var(--primary-blue);
+            color: var(--primary-blue);
+        }
+        /* 选中状态下隐藏刷新按钮，保留朗读按钮 */
+        .scheme-card.selected .refresh-btn { display: none; }
+        
+        .db-img { width: 100%; height: 140px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; }
+        .scheme-title { font-weight: bold; font-size: 0.95rem; margin-bottom: 6px; color: var(--text-dark); }
+        .scheme-desc { font-size: 0.8rem; color: var(--text-light); line-height: 1.5; }
+
+        .eval-section {
+            display: none;
+            background: rgba(59, 114, 242, 0.03); border-radius: 16px; padding: 20px; 
+            margin-top: 20px; text-align: center; border: 1px solid rgba(59, 114, 242, 0.1);
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        .stars { font-size: 28px; color: #FFD700; cursor: pointer; letter-spacing: 5px; margin-bottom: 15px; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .eval-input {
+            width: 100%;
+            padding: 12px; border: 1px solid var(--border-gray); border-radius: 12px;
+            margin-bottom: 15px; font-size: 0.85rem; font-family: inherit; resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .eval-input:focus { border-color: var(--primary-blue); }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { 0% { opacity: 0; transform: translateY(15px); } 100% { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 1000px) {
+            .screens-container { grid-template-columns: 1fr; max-width: 400px; }
+            .header-diagram { position: static; margin-bottom: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-diagram">
+        步骤 1: 图像采集与标注 &nbsp; ---> &nbsp; 步骤 2: 数据面板分析 &nbsp; ---> &nbsp; 步骤 3: 提取图库方案及 AI 撰写 &nbsp; ---> &nbsp; 评价
+    </div>
+
+    <div class="screens-container">
+        
+        <div class="phone-mockup">
+            <div id="map1" class="map-area">
+                <button id="locateBtn" class="locate-btn">📍 我的位置</button>
+            </div>
+            <div class="bottom-sheet click-target">
+                <div class="sheet-title">1. 提交街景照片</div>
+                
+                <div class="wireframe-upload click-target" id="uploadArea">
+                    [ + ] 点击上传待改造的街景照片
+                    <input type="file" id="streetViewInput" accept="image/*">
+                    <img id="previewImage" class="preview-img">
+                </div>
+
+                <div class="sheet-title" style="margin-top: 15px;">2. 标注核心问题</div>
+                <div class="tag-grid" id="tagGrid"></div>
+
+                <button class="btn-fill click-target" id="generateBtn" style="margin-top: 10px;">检索图库 & AI 撰写方案</button>
+            </div>
+        </div>
+
+        <div class="phone-mockup">
+            <div id="map2" class="map-area" style="height: 50%;"></div>
+            <div class="bottom-sheet" style="height: 50%; max-height: 50%;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="sheet-title">社区需求雷达数据</div>
+                    <span style="font-size: 0.8rem; color: var(--primary-blue);" id="feedbackCount">当前区块 ID: A-01</span>
+                </div>
+                <div style="margin: 15px 0;"><canvas id="profileChart" height="180"></canvas></div>
+            </div>
+        </div>
+
+        <div class="phone-mockup">
+            <div class="bottom-sheet" id="schemeSheet" style="max-height: 100%; height: 100%; padding-top: 40px; border-radius: 40px 40px 0 0;">
+                <div class="sheet-title" style="color: var(--text-dark);">推荐改造方案</div>
+                <div style="font-size: 0.8rem; color: var(--text-light); margin-bottom: 20px; line-height: 1.4;">
+                    我们为您从历史案例库中提取了 3 套视觉参考，并由 AI 撰写了针对当前场景的落地策略。请选择您最满意的一套：
+                </div>
+                
+                <div id="schemesContainer">
+                    <div style="color: #ccc; text-align: center; padding: 50px 0; font-size: 0.9rem;">
+                        等待执行检索指令...
+                    </div>
+                </div>
+
+                <div class="eval-section" id="evaluationSection">
+                    <div style="font-weight: 600; margin-bottom: 10px; font-size: 0.95rem; color: var(--text-dark);">为选中的方案打分</div>
+                    <div class="stars click-target" id="starContainer">☆☆☆☆☆</div>
+                    <textarea class="eval-input click-target" id="evalComment" rows="3" placeholder="说说您喜欢这个方案的原因，或者有哪些改进建议..."></textarea>
+                    <button class="btn-fill click-target" id="submitEvalBtn">提交评价并保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // ==========================================
+    // 🔊 系统 1：全局交互音效 (Web Audio API)
+    // ==========================================
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playClickSound() {
+        // 恢复被浏览器默认暂停的音频上下文
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        oscillator.type = 'sine'; // 正弦波，声音比较柔和圆润
+        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); 
+        oscillator.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+        
+        gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); // 音量
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.1);
+    }
+
+    // 监听全局点击事件，为特定元素触发音效
+    document.addEventListener('click', (e) => {
+        const target = e.target;
+        // 如果点的是按钮、标签、卡片本身、或是星星评分区，则播放音效
+        if (target.tagName === 'BUTTON' || 
+            target.classList.contains('wireframe-tag') || 
+            target.classList.contains('scheme-card') || 
+            target.closest('.stars') || 
+            target.id === 'uploadArea') {
+            playClickSound();
+        }
+    });
+
+    // ==========================================
+    // 🎙️ 系统 2：TTS 语音朗读系统 (Web Speech API)
+    // ==========================================
+    function speakText(text, event) {
+        if (event) event.stopPropagation(); // 阻止点击事件冒泡，防止误选卡片
+        
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // 停止当前正在播放的语音
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-CN'; // 设置为中文
+            utterance.rate = 1.0;     // 语速 (1.0是正常速度，可调整例如0.9更适合适老化)
+            utterance.pitch = 1.0;    // 音调
+            window.speechSynthesis.speak(utterance);
+        } else {
+            alert("抱歉，您的浏览器不支持语音朗读功能。");
+        }
+    }
+
+    // 页面离开或刷新时停止朗读
+    window.addEventListener('beforeunload', () => {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    });
+
+    // ==========================================
+    // AI 接口与业务逻辑
+    // ==========================================
+    const AI_CONFIG = {
+        API_KEY: 'sk-e0fdab9c6da343238b0446506897a92f', 
+        API_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', 
+        MODEL_NAME: 'qwen-plus' 
+    };
+
+    const PROBLEMS = [
+    { id: "seats", label: "座椅不足/缺失", count: 14 },
+    { id: "steps", label: "路面高差/不平", count: 12 },
+    { id: "parking", label: "人车混行/占道", count: 21 },
+    { id: "greenery", label: "绿化杂乱/遮挡", count: 21 }
+];
+
+const LOCAL_DB = [];
+
+// 假设你的文件夹在 GitHub 根目录下，名字分别为 seats, steps, parking, greenery
+PROBLEMS.forEach(prob => {
+    for(let i = 1; i <= prob.count; i++) { 
+        LOCAL_DB.push({ 
+            dbId: `${prob.id}_${i}`, 
+            tagId: prob.id, 
+            // 注意：这里去掉了中间的 local_images 路径，直接指向四个文件夹
+            imageUrl: `./${prob.id}/${i}.jpg` 
+        });
+    }
+});
+    let currentLatLng = null;
+    let selectedTagId = null;
+    let currentImageBase64 = null;
+    let generatedSchemesData = [];
+    let selectedSchemeIndex = null;
+    let currentRating = 0;
+    let map1, map2, markerCluster, profileChart, tempMarker;
+
+    // --- 初始化 UI ---
+    function initMaps() {
+        const center = [39.904, 116.407];
+        const mapOptions = { zoomControl: false, attributionControl: false };
+        const tileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'; 
+
+        map1 = L.map('map1', mapOptions).setView(center, 15);
+        L.tileLayer(tileUrl).addTo(map1);
+        map2 = L.map('map2', mapOptions).setView(center, 14);
+        L.tileLayer(tileUrl).addTo(map2);
+
+        map1.on('click', (e) => { updateMarker(e.latlng); });
+
+        markerCluster = L.markerClusterGroup({
+            iconCreateFunction: function(cluster) {
+                return L.divIcon({ html: `<div style="background:var(--alert-red);color:white;width:30px;height:30px;border-radius:15px;line-height:30px;text-align:center;font-weight:bold;box-shadow:0 0 10px rgba(230,106,106,0.5);">${cluster.getChildCount()}</div>`, className: 'custom-cluster', iconSize: L.point(30, 30) });
+            }
+        });
+        map2.addLayer(markerCluster);
+    }
+
+    function updateMarker(latlng) {
+        if(tempMarker) map1.removeLayer(tempMarker);
+        tempMarker = L.marker(latlng).addTo(map1);
+        currentLatLng = latlng;
+        map1.panTo(latlng);
+        map2.panTo(latlng);
+    }
+
+    document.getElementById('locateBtn').addEventListener('click', () => {
+        const btn = document.getElementById('locateBtn');
+        btn.innerText = "定位中...";
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
+                    map1.setView(latlng, 16);
+                    updateMarker(latlng);
+                    btn.innerText = "📍 我的位置";
+                }, 
+                () => { alert("定位失败，请检查浏览器权限。"); btn.innerText = "📍 我的位置"; },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            alert("当前浏览器不支持地理定位。"); btn.innerText = "📍 我的位置";
+        }
+    });
+
+    function buildTags() {
+        const grid = document.getElementById('tagGrid');
+        PROBLEMS.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.className = 'wireframe-tag'; btn.innerText = tag.label;
+            btn.onclick = () => {
+                document.querySelectorAll('.wireframe-tag').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active'); selectedTagId = tag.id;
+            };
+            grid.appendChild(btn);
+        });
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('profileChart').getContext('2d');
+        profileChart = new Chart(ctx, {
+            type: 'radar', 
+            data: { 
+                labels: PROBLEMS.map(p => p.label.split('/')[0]), 
+                datasets: [{ label: '问题反馈量', data: [12, 5, 8, 3], backgroundColor: 'rgba(59, 114, 242, 0.2)', borderColor: '#3B72F2', pointBackgroundColor: '#3B72F2', borderWidth: 2 }] 
+            },
+            options: { scales: { r: { beginAtZero: true, ticks: { display: false } } } }
+        });
+    }
+
+    const fileInput = document.getElementById('streetViewInput');
+    const previewImg = document.getElementById('previewImage');
+    document.getElementById('uploadArea').addEventListener('click', (e) => { if(e.target.tagName !== 'IMG') fileInput.click(); });
+    
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            previewImg.src = evt.target.result;
+            previewImg.style.display = 'block';
+            currentImageBase64 = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+        if(!currentLatLng) return alert("请先在屏幕1的地图上点击选择位置，或点击定位按钮。");
+        if(!selectedTagId) return alert("请先选择一个核心问题标签。");
+        if(!currentImageBase64) return alert("请上传一张待改造的街景照片。");
+
+        const tagObj = PROBLEMS.find(p => p.id === selectedTagId);
+        const container = document.getElementById('schemesContainer');
+        document.getElementById('evaluationSection').style.display = 'none';
+        
+        const relatedImages = LOCAL_DB.filter(item => item.tagId === selectedTagId);
+        const selectedImages = relatedImages.sort(() => 0.5 - Math.random()).slice(0, 3);
+
+        container.innerHTML = `<div style="text-align:center; padding: 40px 0; color: var(--primary-blue);"><div style="font-size: 28px; animation: spin 1s linear infinite; margin-bottom: 15px;">⚙️</div>正在检索案例库并由 AI 规划方案...</div>`;
+
+        const promptText = `用户反馈了街景需要适老化改造，核心问题是：“${tagObj.label}”。我们已经从成功案例库中提取了 3 张参考图。请配合这 3 张图，分别写出 3 套不同干预程度的适老化改造方案。必须严格返回如下 JSON 数组格式（不要包含任何 markdown 标记）：[{"title": "方案一名称", "desc": "具体的改造措施，约40字以内"},{"title": "方案二名称", "desc": "具体的改造措施，约40字以内"},{"title": "方案三名称", "desc": "具体的改造措施，约40字以内"}]`;
+
+        try {
+            const response = await fetch(AI_CONFIG.API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AI_CONFIG.API_KEY}` },
+                body: JSON.stringify({
+                    model: AI_CONFIG.MODEL_NAME,
+                    messages: [ { role: "system", content: "只返回标准 JSON 数组。" }, { role: "user", content: promptText } ]
+                })
+            });
+
+            const result = await response.json();
+            let text = result.choices[0].message.content.trim();
+            if (text.startsWith('```')) text = text.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+            const aiTexts = JSON.parse(text);
+
+            generatedSchemesData = aiTexts.map((txt, index) => ({
+                title: txt.title,
+                desc: txt.desc,
+                imageUrl: selectedImages[index] ? selectedImages[index].imageUrl : ''
+            }));
+
+            renderSchemes();
+            L.marker([currentLatLng.lat, currentLatLng.lng]).bindPopup(`<b>📍 标记: ${tagObj.label}</b><img src="${currentImageBase64}" style="width:100%;border-radius:4px;margin-top:5px;">`).addTo(markerCluster);
+
+        } catch (error) {
+            console.error(error);
+            container.innerHTML = `<div style="color:var(--alert-red); text-align:center; font-size: 0.85rem;">生成失败，请检查 API 密钥或网络连接。</div>`;
+        }
+    });
+
+    // --- 渲染卡片：增加了操作按钮组 (朗读 + 刷新) ---
+    function renderSchemes() {
+        const container = document.getElementById('schemesContainer');
+        container.innerHTML = generatedSchemesData.map((scheme, index) => `
+            <div class="scheme-card" id="card-${index}" onclick="handleSelectScheme(${index})">
+                <div class="action-btns">
+                    <button class="icon-btn speak-btn" onclick="speakText('方案 ${index + 1}: ${scheme.title}。${scheme.desc}', event)" title="朗读方案">🔊 朗读</button>
+                    <button class="icon-btn refresh-btn" onclick="refreshSingleScheme(event, ${index})" title="不喜欢这个？重新生成一套">🔄 换一套</button>
+                </div>
+                <img src="${scheme.imageUrl}" class="db-img" alt="图库案例" onerror="this.src='[https://via.placeholder.com/400x250?text=本地图片缺失](https://via.placeholder.com/400x250?text=本地图片缺失)'">
+                <div class="scheme-title" id="title-${index}">方案 ${index + 1}: ${scheme.title}</div>
+                <div class="scheme-desc" id="desc-${index}">${scheme.desc}</div>
+            </div>
+        `).join('');
+    }
+
+    window.refreshSingleScheme = async function(event, index) {
+        event.stopPropagation(); 
+        const card = document.getElementById(`card-${index}`);
+        card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; 
+        
+        document.getElementById(`title-${index}`).innerText = "正在重新生成...";
+        document.getElementById(`desc-${index}`).innerText = "AI 正在分析图库并重新撰写策略，请稍候...";
+
+        const tagObj = PROBLEMS.find(p => p.id === selectedTagId);
+        const relatedImages = LOCAL_DB.filter(item => item.tagId === selectedTagId);
+        const newImage = relatedImages[Math.floor(Math.random() * relatedImages.length)];
+
+        try {
+            const response = await fetch(AI_CONFIG.API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AI_CONFIG.API_KEY}` },
+                body: JSON.stringify({
+                    model: AI_CONFIG.MODEL_NAME,
+                    messages: [ { role: "system", content: "只返回标准 JSON 对象。" }, { role: "user", content: `用户反馈了街景需要适老化改造，核心问题是：“${tagObj.label}”。请写出 1 套全新的适老化改造方案。严格返回JSON对象：{"title": "新方案名称", "desc": "具体的改造措施，约40字以内"}` } ]
+                })
+            });
+
+            const result = await response.json();
+            let text = result.choices[0].message.content.trim();
+            if (text.startsWith('```')) text = text.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+            const aiText = JSON.parse(text);
+
+            generatedSchemesData[index] = { title: aiText.title, desc: aiText.desc, imageUrl: newImage ? newImage.imageUrl : '' };
+            if (selectedSchemeIndex === index) { selectedSchemeIndex = null; document.getElementById('evaluationSection').style.display = 'none'; }
+            renderSchemes(); 
+            
+        } catch (error) {
+            console.error(error); alert("刷新方案失败，请检查网络后重试。");
+            card.style.opacity = '1'; card.style.pointerEvents = 'auto'; renderSchemes();
+        }
+    };
+
+    window.handleSelectScheme = function(index) {
+        // 如果正在朗读，选中新卡片时停止朗读，避免声音重叠吵闹
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        
+        selectedSchemeIndex = index;
+        document.querySelectorAll('.scheme-card').forEach((el, i) => {
+            if (i === index) el.classList.add('selected');
+            else el.classList.remove('selected');
+        });
+
+        document.getElementById('evaluationSection').style.display = 'block';
+        resetStars();
+        document.getElementById('schemeSheet').scrollTo({ top: 1000, behavior: 'smooth' });
+    };
+
+    const starContainer = document.getElementById('starContainer');
+    starContainer.addEventListener('click', (e) => {
+        const rect = starContainer.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        currentRating = Math.ceil((x / rect.width) * 5);
+        if(currentRating > 5) currentRating = 5;
+        if(currentRating < 1) currentRating = 1;
+        updateStarUI();
+    });
+
+    function updateStarUI() {
+        let starsStr = '';
+        for(let i=1; i<=5; i++) starsStr += (i <= currentRating) ? '★' : '☆';
+        starContainer.innerText = starsStr;
+    }
+
+    function resetStars() {
+        currentRating = 0; document.getElementById('evalComment').value = ''; updateStarUI();
+    }
+
+    document.getElementById('submitEvalBtn').addEventListener('click', () => {
+        if(currentRating === 0) return alert("请先点击星星为方案打分哦！");
+        const comment = document.getElementById('evalComment').value;
+        const chosenScheme = generatedSchemesData[selectedSchemeIndex];
+
+        console.log("评价数据已记录: ", {
+            timestamp: new Date().toISOString(), tag: selectedTagId,
+            chosenImage: chosenScheme.imageUrl, chosenTitle: chosenScheme.title,
+            rating: currentRating, feedback: comment
+        });
+        alert("感谢您的评价！\n(数据已记录，您可以在 F12 控制台查看)");
+        
+        document.getElementById('evaluationSection').style.display = 'none';
+        document.querySelectorAll('.scheme-card').forEach(el => el.classList.remove('selected'));
+        selectedSchemeIndex = null;
+    });
+
+    initMaps();
+    buildTags();
+    initChart();
+</script>
+</body>
+</html>
